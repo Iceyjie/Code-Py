@@ -13,6 +13,7 @@ import numpy as np
 import parameter as para
 import figure
 import rsome as rso
+from gurobipy import *
 from rsome import ro
 from rsome import cpt_solver as cpt
 from datetime import timedelta
@@ -27,6 +28,38 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LassoCV
 from itertools import islice
 import statsmodels.api as sm
+
+def read_data(ship_type):
+    raw_data = pd.read_csv(os.path.join(para.merge_path, para.merge_departed_filename)) # without any filter including all ship types
+    data = raw_data[raw_data[para.arrived_ship_type] == ship_type].copy()
+    changeDatetime(data) 
+    data = addVesselInformation(data)
+    data = data.dropna(subset=para.features)
+    data = data.sort_values(by=para.due_eta)
+    data = data[(data[para.departed_service_time] >= 1) & (data[para.departed_service_time] <= 36)]
+    # data[para.departed_service_time].describe()
+    return data
+
+def predict_and_estimate(z, xi):
+    N = len(z)
+    M = xi.shape[1] if len(xi.shape) > 1 else 1  # number of features;
+    model = Model()
+    sigma = model.addVar(lb=0, vtype=GRB.CONTINUOUS, name="sigma")
+    alpha = model.addVars(M, lb=0, ub=1, vtype=GRB.CONTINUOUS, name="alpha")
+    beta = model.addVar(vtype=GRB.CONTINUOUS, name="beta")
+    eta = model.addVars(range(N), lb=0, vtype=GRB.CONTINUOUS, name="eta")
+
+    model.addObjective(sigma, GRB.MINIMIZE)
+    model.addConstr(quicksum(eta[i] for i in range(N)) <= N*sigma)
+    model.addConstrs(eta[w] >= -z[w] + quicksum(alpha[j] * xi[w][j] for j in range(M)) + beta for w in range(N))
+    model.addConstrs(eta[w] >= z[w] - quicksum(alpha[j] * xi[w][j] for j in range(M)) - beta for w in range(N))
+
+    model.optimize()
+    if model.status == GRB.OPTIMAL:
+        return [alpha[j].x for j in range(M)], beta.x, sigma.x
+    else:
+        raise Exception("Optimization failed with status: {}".format(model.status))
+
 
 # --- Utility Function ---
 def oneDecimal(number):
@@ -668,13 +701,3 @@ def compute_eta(row, port_center):
     except:
         return pd.NaT    
 
-def read_data(ship_type):
-    raw_data = pd.read_csv(os.path.join(para.merge_path, para.merge_departed_filename)) # without any filter including all ship types
-    data = raw_data[raw_data[para.arrived_ship_type] == ship_type].copy()
-    changeDatetime(data) 
-    data = addVesselInformation(data)
-    data = data.dropna(subset=para.raw_features)
-    data = data.sort_values(by=para.due_eta)
-    data = data[(data[para.departed_service_time] >= 1) & (data[para.departed_service_time] <= 36)]
-    # data[para.departed_service_time].describe()
-    return data

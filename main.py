@@ -6,17 +6,53 @@ import pandas as pd
 
 # --------------------------------- Setup ----------------------------------
 ship_type = 'CONTAINER' # make prediction and schedules for this ship type;|
+train_start_time_line = "2023-01-01"
+train_end_time_line = "2025-01-01"
 # -------------------------------- End ---------------------------------
-
 
 # func.createFolder(para.figure_path)
 # func.mergeDeparted()
 data = func.read_data(ship_type)
 
 
-# #===================================== Make rolling prediction ========================================
-# print("=== Here is rolling prediction by month lasso regression ===") #last 12 months as training data and 1 month as test data
-# results_month, results_test = predict.goRollingByMonth(data)
+print("--- Here is rolling prediction by month lasso regression ---") #last 12 months as training data and 1 month as test data
+
+training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)]
+test_data = data[(data[para.due_eta] >= train_end_time_line)]
+
+from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+
+unique_agent_names = test_data[para.in_port_agent_name].unique()
+for agent_name in unique_agent_names:
+    agent_data = training_data[training_data[para.in_port_agent_name] == agent_name]
+    sample_z = agent_data[para.arrival_delay].values.astype(float)
+    encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
+    encoded = encoder.fit_transform(agent_data[para.categorical_features])
+    numeric_data = agent_data[para.numeric_features].values
+    sample_xi = np.concatenate([numeric_data, encoded], axis=1).astype(float)
+    if len(sample_z) > 0:
+        alpha_list, beta, sigma = func.predict_and_estimate(sample_z, sample_xi)
+        print(f"=== Optimization Results for agent {agent_name} ===")
+        print(f"Alpha coefficients: {alpha_list}")
+        print(f"Beta: {beta}")
+        print(f"Sigma: {sigma}")
+
+
+
+# 将historical_data的所有列转换为xi（二维numpy数组）
+xi = training_data[para.features].values.astype(float)
+z = training_data[para.arrival_delay].values.astype(float)
+
+# 调用predict_and_estimate函数
+if len(z) > 0:
+    alpha_list, beta, sigma = func.predict_and_estimate(z, xi)
+    print(f"=== Optimization Results ===")
+    print(f"Alpha coefficients: {alpha_list}")
+    print(f"Beta: {beta}")
+    print(f"Sigma: {sigma}")
+
+results_month, results_test = predict.goRollingByMonth(data)
 # results_month.to_csv("../Predict/predict-results-month.csv", index=False)
 # results_test.to_csv("../Predict/predict-results-vessel.csv", index=False)
 # print(results_month[['R2_train', 'R2_test', 'RMSE', 'MAE']].mean().round(2))

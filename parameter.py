@@ -94,21 +94,7 @@ pasthour_set = [i for i in range(1, 3)]
 train_window_day = 52*7*2
 test_window_day = 7
 alpha = 0.00002
-numeric_features = (
-                    [length, beam, GT] 
-                    # [f'past_{pasthour}hour_{stat}' for stat in stats for pasthour in pasthour_set] + 
-                    # [f'past_{pastday}day_same_hour_{stat}' for stat in stats for pastday in pastday_same_hour_set] + 
-                    # [f'past_{pastday}day_{stat}' for stat in stats for pastday in pastday_set] + 
-                    # [f'currentday_{stat}' for stat in stats]
-                    )
-
-categorical_features = [
-                        # year,
-                        arrived_ship_type,
-                        arrived_agent_name, 
-                        due_last_port,
-                        in_port_imo_no
-                        ]
-
-raw_features = numeric_features + categorical_features
+numeric_features = [length, beam, GT] 
+categorical_features = [arrived_ship_type, arrived_agent_name, due_last_port, in_port_imo_no]
+features = numeric_features + categorical_features
 
