@@ -40,7 +40,7 @@ def read_data(ship_type):
 
 def prepare_ship_data(data, train_start_time_line, train_end_time_line):
     """
-    准备船舶数据，分离训练集和测试集，并计算每个agent的sigma值
+    准备船舶数据，分离训练集和测试集，并计算每个 agent name 的sigma值
 
     Parameters:
     - data: 原始数据DataFrame
@@ -48,7 +48,6 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line):
     - train_end_time_line: 训练结束时间
 
     Returns:
-    - training_data: 训练数据
     - test_data: 测试数据（包含sigma列）
     """
     training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
