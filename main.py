@@ -3,7 +3,7 @@ import predict
 import os
 import parameter as para
 import pandas as pd
-# comment
+
 # --------------------------------- Setup ----------------------------------
 ship_type = 'CONTAINER' # make prediction and schedules for this ship type;|
 train_start_time_line = "2023-01-01"
@@ -14,9 +14,6 @@ sigma = 'sigma'
 # func.createFolder(para.figure_path)
 # func.mergeDeparted()
 data = func.read_data(ship_type)
-
-
-print("--- Here is rolling prediction by month lasso regression ---") #last 12 months as training data and 1 month as test data
 
 training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)]
 test_data = data[(data[para.due_eta] >= train_end_time_line)]
