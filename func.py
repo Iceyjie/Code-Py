@@ -18,7 +18,6 @@ from rsome import ro
 from rsome import cpt_solver as cpt
 from datetime import timedelta
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import Lasso
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from geopy.distance import geodesic
@@ -26,11 +25,10 @@ from sklearn.metrics import r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LassoCV
-from itertools import islice
 import statsmodels.api as sm
 
 def read_data(ship_type):
-    raw_data = pd.read_csv(os.path.join(para.merge_path, para.merge_departed_filename)) # without any filter including all ship types
+    raw_data = pd.read_csv(os.path.join(para.data_folder, para.merge_departed_filename)) # without any filter including all ship types
     data = raw_data[raw_data[para.arrived_ship_type] == ship_type].copy()
     changeDatetime(data) 
     data = addVesselInformation(data)
@@ -39,6 +37,40 @@ def read_data(ship_type):
     data = data[(data[para.departed_service_time] >= 1) & (data[para.departed_service_time] <= 36)]
     # data[para.departed_service_time].describe()
     return data
+
+def prepare_ship_data(data, train_start_time_line, train_end_time_line):
+    """
+    准备船舶数据，分离训练集和测试集，并计算每个agent的sigma值
+
+    Parameters:
+    - data: 原始数据DataFrame
+    - train_start_time_line: 训练开始时间
+    - train_end_time_line: 训练结束时间
+
+    Returns:
+    - training_data: 训练数据
+    - test_data: 测试数据（包含sigma列）
+    """
+    training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
+    test_data = data[(data[para.due_eta] >= train_end_time_line)].copy()
+
+    unique_agent_names = test_data[para.in_port_agent_name].unique()
+    agent_sigma = {}
+
+    for agent_name in unique_agent_names:
+        agent_data = training_data[training_data[para.in_port_agent_name] == agent_name]
+        if agent_data.empty:
+            continue
+        sample_z = agent_data[para.arrival_delay].values.astype(float)
+        encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
+        encoded = encoder.fit_transform(agent_data[para.categorical_features])
+        numeric_data = agent_data[para.numeric_features].values
+        sample_xi = np.concatenate([numeric_data, encoded], axis=1).astype(float)
+        alpha_list, beta, sigma_value = predict_and_estimate(sample_z, sample_xi)
+        agent_sigma[agent_name] = sigma_value
+
+    test_data.loc[:, 'sigma'] = test_data[para.in_port_agent_name].map(agent_sigma)
+    return test_data
 
 def predict_and_estimate(z, xi):
     N = len(z)
@@ -49,7 +81,7 @@ def predict_and_estimate(z, xi):
     beta = model.addVar(vtype=GRB.CONTINUOUS, name="beta")
     eta = model.addVars(range(N), lb=0, vtype=GRB.CONTINUOUS, name="eta")
 
-    model.addObjective(sigma, GRB.MINIMIZE)
+    model.setObjective(sigma, GRB.MINIMIZE)
     model.addConstr(quicksum(eta[i] for i in range(N)) <= N*sigma)
     model.addConstrs(eta[w] >= -z[w] + quicksum(alpha[j] * xi[w][j] for j in range(M)) + beta for w in range(N))
     model.addConstrs(eta[w] >= z[w] - quicksum(alpha[j] * xi[w][j] for j in range(M)) - beta for w in range(N))
@@ -60,6 +92,16 @@ def predict_and_estimate(z, xi):
     else:
         raise Exception("Optimization failed with status: {}".format(model.status))
 
+def generate_instance(ship_data):
+    for day, day_data in ship_data.groupby(para.due_eta_day):
+        if (len(day_data) < 6): continue
+        day_data = day_data[para.instance_columns]
+        base_date = min(day_data[para.arrived_arrival_time].min(), day_data[para.due_eta].min())
+        day_data['ATA'] = twoDecimal((day_data[para.arrived_arrival_time] - base_date).dt.total_seconds() / 3600)
+        day_data['ETA'] = twoDecimal((day_data[para.due_eta] - base_date).dt.total_seconds() / 3600)
+        day_data["s"] = twoDecimal(day_data[para.departed_service_time])
+        day_data.to_csv(f'{para.instance_path}{day}.csv', index=False)
+        print(f'------ berth schedule on {day} ------')
 
 # --- Utility Function ---
 def oneDecimal(number):
@@ -341,7 +383,7 @@ def addFeature(data):
     data[para.shiptype_agentname] = data[para.arrived_ship_type].astype(str) + "_" + data[para.arrived_agent_name].astype(str)
 
 def addVesselInformation(data):
-    ship_infor = pd.read_csv("../Data/Web/shipInformation.csv")
+    ship_infor = pd.read_csv("Data/shipInformation.csv")
     data[para.in_port_imo_no] = data[para.in_port_imo_no].astype(str)
     ship_infor["IMO"] = ship_infor["IMO"].astype("Int64").astype(str)
 

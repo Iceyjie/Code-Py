@@ -73,9 +73,10 @@ zip_path = f'{root_path}/ZIP/'
 merge_path = '../Data/MERGE/'
 figure_path = '../Figure/'
 result_path = '../Result/'
-instance_path = '../Data/Instance/'
+instance_path = 'Instance/'
 data_path = '../Data/data/'
 
+data_folder = 'Data'
 
 merge_filename = 'mergeResult.csv'
 raw_merge_filename = 'rawMergeResult.csv'
@@ -97,4 +98,5 @@ alpha = 0.00002
 numeric_features = [length, beam, GT] 
 categorical_features = [arrived_ship_type, arrived_agent_name, due_last_port, in_port_imo_no]
 features = numeric_features + categorical_features
+instance_columns = [arrived_call_sign, arrived_ship_type, arrived_agent_name, due_last_port, arrived_arrival_time, due_eta, arrival_delay, departed_service_time, 'sigma']
 
