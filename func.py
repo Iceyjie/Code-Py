@@ -69,6 +69,7 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line):
         agent_sigma[agent_name] = sigma_value
 
     test_data.loc[:, 'sigma'] = test_data[para.in_port_agent_name].map(agent_sigma)
+    test_data = test_data.dropna(subset=['sigma'])
     return test_data
 
 def predict_and_estimate(z, xi):
