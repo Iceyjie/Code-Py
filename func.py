@@ -38,7 +38,7 @@ def read_data(ship_type):
     # data[para.departed_service_time].describe()
     return data
 
-def prepare_ship_data(data, train_start_time_line, train_end_time_line):
+def prepare_ship_data(data, train_start_time_line, train_end_time_line, classify_feature):
     """
     准备船舶数据，分离训练集和测试集，并计算每个 agent name 的sigma值
 
@@ -53,11 +53,11 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line):
     training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
     test_data = data[(data[para.due_eta] >= train_end_time_line)].copy()
 
-    unique_agent_names = test_data[para.in_port_agent_name].unique()
+    feature_list = test_data[classify_feature].unique()
     agent_sigma = {}
 
-    for agent_name in unique_agent_names:
-        agent_data = training_data[training_data[para.in_port_agent_name] == agent_name]
+    for agent_name in feature_list:
+        agent_data = training_data[training_data[classify_feature] == agent_name]
         if agent_data.empty:
             continue
         sample_z = agent_data[para.arrival_delay].values.astype(float)
@@ -68,7 +68,7 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line):
         alpha_list, beta, sigma_value = predict_and_estimate(sample_z, sample_xi)
         agent_sigma[agent_name] = sigma_value
 
-    test_data.loc[:, 'sigma'] = test_data[para.in_port_agent_name].map(agent_sigma)
+    test_data.loc[:, 'sigma'] = test_data[classify_feature].map(agent_sigma)
     test_data = test_data.dropna(subset=['sigma'])
     return test_data
 
