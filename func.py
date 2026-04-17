@@ -57,7 +57,8 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line, classify
     agent_sigma = {}
 
     for agent_name in feature_list:
-        agent_data = training_data[training_data[classify_feature] == agent_name]
+        agent_data = training_data.copy()
+        # agent_data = training_data[training_data[classify_feature] == agent_name]
         if agent_data.empty:
             continue
         sample_z = agent_data[para.arrival_delay].values.astype(float)
