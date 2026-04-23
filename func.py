@@ -40,36 +40,63 @@ def read_data(ship_type):
 
 def prepare_ship_data(data, train_start_time_line, train_end_time_line, classify_feature):
     """
-    准备船舶数据，分离训练集和测试集，并计算每个 agent name 的sigma值
+    准备船舶数据，分离训练集和测试集，并计算每个 agent name 的 sigma 值。
+    同时使用每个 agent 的 alpha/beta 对 test_data 进行预测。
 
     Parameters:
     - data: 原始数据DataFrame
     - train_start_time_line: 训练开始时间
     - train_end_time_line: 训练结束时间
+    - classify_feature: 用于分组建模的列名
 
     Returns:
-    - test_data: 测试数据（包含sigma列）
+    - test_data: 测试数据（包含 sigma 和 pred_delay 列）
     """
     training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
     test_data = data[(data[para.due_eta] >= train_end_time_line)].copy()
 
     feature_list = test_data[classify_feature].unique()
     agent_sigma = {}
+    agent_alpha = {}
+    agent_beta = {}
+
+    # 使用训练集整体构建编码器，保证 train/test 特征映射一致
+    encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
+    encoder.fit(training_data[para.categorical_features])
 
     for agent_name in feature_list:
-        agent_data = training_data.copy()
-        # agent_data = training_data[training_data[classify_feature] == agent_name]
+        # agent_data = training_data.copy()
+        agent_data = training_data[training_data[classify_feature] == agent_name].copy()
         if agent_data.empty:
             continue
+
         sample_z = agent_data[para.arrival_delay].values.astype(float)
-        encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
-        encoded = encoder.fit_transform(agent_data[para.categorical_features])
+        encoded = encoder.transform(agent_data[para.categorical_features])
         numeric_data = agent_data[para.numeric_features].values
         sample_xi = np.concatenate([numeric_data, encoded], axis=1).astype(float)
         alpha_list, beta, sigma_value = predict_and_estimate(sample_z, sample_xi)
-        agent_sigma[agent_name] = sigma_value
 
+        agent_sigma[agent_name] = sigma_value
+        agent_alpha[agent_name] = np.array(alpha_list, dtype=float)
+        agent_beta[agent_name] = float(beta)
+
+    # 对测试集进行预测
+    encoded_test = encoder.transform(test_data[para.categorical_features])
+    numeric_data_test = test_data[para.numeric_features].values
+    test_xi = np.concatenate([numeric_data_test, encoded_test], axis=1).astype(float)
+
+    test_data = test_data.copy()
     test_data.loc[:, 'sigma'] = test_data[classify_feature].map(agent_sigma)
+    test_data.loc[:, 'pred_delay'] = np.nan
+
+    test_feature_keys = test_data[classify_feature].to_numpy()
+    for idx, feature_key in enumerate(test_feature_keys):
+        if feature_key not in agent_alpha:
+            continue
+        alpha = agent_alpha[feature_key]
+        beta = agent_beta[feature_key]
+        test_data.iloc[idx, test_data.columns.get_loc('pred_delay')] = float(np.dot(test_xi[idx], alpha) + beta)
+
     test_data = test_data.dropna(subset=['sigma'])
     return test_data
 
@@ -100,6 +127,7 @@ def generate_instance(ship_data):
         base_date = min(day_data[para.arrived_arrival_time].min(), day_data[para.due_eta].min())
         day_data['ATA'] = twoDecimal((day_data[para.arrived_arrival_time] - base_date).dt.total_seconds() / 3600)
         day_data['ETA'] = twoDecimal((day_data[para.due_eta] - base_date).dt.total_seconds() / 3600)
+        day_data['PTA'] = twoDecimal(day_data['ETA'] + day_data['pred_delay'])
         day_data["s"] = twoDecimal(day_data[para.departed_service_time])
         day_data.to_csv(f'{para.instance_path}{day}.csv', index=False)
         print(f'------ berth schedule on {day} ------')

@@ -98,5 +98,5 @@ alpha = 0.00002
 numeric_features = [length, beam, GT] 
 categorical_features = [arrived_ship_type, arrived_agent_name, due_last_port, in_port_imo_no]
 features = numeric_features + categorical_features
-instance_columns = [arrived_call_sign, arrived_ship_type, arrived_agent_name, due_last_port, arrived_arrival_time, due_eta, arrival_delay, departed_service_time, 'sigma']
+instance_columns = [arrived_call_sign, arrived_ship_type, arrived_agent_name, due_last_port, arrived_arrival_time, due_eta, arrival_delay, departed_service_time, 'sigma', 'pred_delay']
 
