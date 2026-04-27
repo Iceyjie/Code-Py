@@ -60,7 +60,7 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line, classify
     for i in range(12, len(all_months)):
         test_month = all_months[i]
         if (test_month < pd.Period(train_end_time_line, freq="M")): continue
-        train_months = all_months[(i - 12):i]  
+        train_months = all_months[(i - 24):i]  
         print(f'=== Here is predict {i}/{len(all_months)}-th month ===')
         training_data = data[data[year_month].isin(train_months)]
         if training_data.empty: continue
