@@ -12,5 +12,5 @@ train_end_time_line = "2025-01-01"
 # fc.createFolder(para.figure_path)
 # fc.mergeDeparted()
 data = fc.read_data(ship_type)
-ship_data = fc.prepare_ship_data(data, train_start_time_line, train_end_time_line, para.arrived_call_sign)
+ship_data = fc.prepare_ship_data(data, train_start_time_line, train_end_time_line, para.due_last_port)
 fc.generate_instance(ship_data)
