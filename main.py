@@ -7,7 +7,7 @@ import parameter as para
 ship_type = 'CONTAINER' # make prediction and schedules for this ship type;|
 train_start_time_line = "2023-01-01"
 train_end_time_line = "2025-01-01"
-# -------------------------------- End ---------------------------------
+# -------------------------------- End -------------------------------------
 
 # fc.createFolder(para.figure_path)
 # fc.mergeDeparted()

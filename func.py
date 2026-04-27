@@ -52,53 +52,67 @@ def prepare_ship_data(data, train_start_time_line, train_end_time_line, classify
     Returns:
     - test_data: 测试数据（包含 sigma 和 pred_delay 列）
     """
-    training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
-    test_data = data[(data[para.due_eta] >= train_end_time_line)].copy()
 
-    feature_list = test_data[classify_feature].unique()
-    agent_sigma = {}
-    agent_alpha = {}
-    agent_beta = {}
+    year_month = "year_month"
+    data[year_month] = data[para.due_eta].dt.to_period("M")
+    all_months = sorted(data[year_month].unique())
+    all_test_data = []
+    for i in range(12, len(all_months)):
+        test_month = all_months[i]
+        if (test_month < pd.Period(train_end_time_line, freq="M")): continue
+        train_months = all_months[(i - 12):i]  
+        print(f'=== Here is predict {i}/{len(all_months)}-th month ===')
+        training_data = data[data[year_month].isin(train_months)]
+        if training_data.empty: continue
+        test_data = data[data[year_month] == test_month]
+        if test_data.empty: continue
+        # training_data = data[(data[para.due_eta] >= train_start_time_line) & (data[para.due_eta] < train_end_time_line)].copy()
+        # test_data = data[(data[para.due_eta] >= train_end_time_line)].copy()
+        feature_list = test_data[classify_feature].unique()
+        agent_sigma = {}
+        agent_alpha = {}
+        agent_beta = {}
 
-    # 使用训练集整体构建编码器，保证 train/test 特征映射一致
-    encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
-    encoder.fit(training_data[para.categorical_features])
+        # 使用训练集整体构建编码器，保证 train/test 特征映射一致
+        encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
+        encoder.fit(training_data[para.categorical_features])
 
-    for agent_name in feature_list:
-        # agent_data = training_data.copy()
-        agent_data = training_data[training_data[classify_feature] == agent_name].copy()
-        if agent_data.empty:
-            continue
+        for agent_name in feature_list:
+            # agent_data = training_data.copy()
+            agent_data = training_data[training_data[classify_feature] == agent_name].copy()
+            if agent_data.empty:
+                continue
 
-        sample_z = agent_data[para.arrival_delay].values.astype(float)
-        encoded = encoder.transform(agent_data[para.categorical_features])
-        numeric_data = agent_data[para.numeric_features].values
-        sample_xi = np.concatenate([numeric_data, encoded], axis=1).astype(float)
-        alpha_list, beta, sigma_value = predict_and_estimate(sample_z, sample_xi)
+            sample_z = agent_data[para.arrival_delay].values.astype(float)
+            encoded = encoder.transform(agent_data[para.categorical_features])
+            numeric_data = agent_data[para.numeric_features].values
+            sample_xi = np.concatenate([numeric_data, encoded], axis=1).astype(float)
+            alpha_list, beta, sigma_value = predict_and_estimate(sample_z, sample_xi)
 
-        agent_sigma[agent_name] = sigma_value
-        agent_alpha[agent_name] = np.array(alpha_list, dtype=float)
-        agent_beta[agent_name] = float(beta)
+            agent_sigma[agent_name] = sigma_value
+            agent_alpha[agent_name] = np.array(alpha_list, dtype=float)
+            agent_beta[agent_name] = float(beta)
 
-    # 对测试集进行预测
-    encoded_test = encoder.transform(test_data[para.categorical_features])
-    numeric_data_test = test_data[para.numeric_features].values
-    test_xi = np.concatenate([numeric_data_test, encoded_test], axis=1).astype(float)
+        # 对测试集进行预测
+        encoded_test = encoder.transform(test_data[para.categorical_features])
+        numeric_data_test = test_data[para.numeric_features].values
+        test_xi = np.concatenate([numeric_data_test, encoded_test], axis=1).astype(float)
 
-    test_data = test_data.copy()
-    test_data.loc[:, 'sigma'] = test_data[classify_feature].map(agent_sigma)
-    test_data.loc[:, 'pred_delay'] = np.nan
+        test_data.loc[:, 'sigma'] = test_data[classify_feature].map(agent_sigma)
+        test_data.loc[:, 'pred_delay'] = np.nan
 
-    test_feature_keys = test_data[classify_feature].to_numpy()
-    for idx, feature_key in enumerate(test_feature_keys):
-        if feature_key not in agent_alpha:
-            continue
-        alpha = agent_alpha[feature_key]
-        beta = agent_beta[feature_key]
-        test_data.iloc[idx, test_data.columns.get_loc('pred_delay')] = float(np.dot(test_xi[idx], alpha) + beta)
+        test_feature_keys = test_data[classify_feature].to_numpy()
+        for idx, feature_key in enumerate(test_feature_keys):
+            if feature_key not in agent_alpha:
+                continue
+            alpha = agent_alpha[feature_key]
+            beta = agent_beta[feature_key]
+            test_data.iloc[idx, test_data.columns.get_loc('pred_delay')] = float(np.dot(test_xi[idx], alpha) + beta)
 
-    test_data = test_data.dropna(subset=['sigma'])
-    return test_data
+        test_data = test_data.dropna(subset=['sigma', 'pred_delay'])
+        all_test_data.append(test_data)
+    all_test_data = pd.concat(all_test_data, ignore_index=True) if all_test_data else pd.DataFrame()
+    return all_test_data
 
 def predict_and_estimate(z, xi):
     N = len(z)
